@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Escaneo con Captura Manual</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 10px; text-align: center; }
+    button, input[type=file] { margin: 10px 0; padding: 12px; font-size: 16px; border-radius: 8px; }
+    #reader { width: 100%; max-width: 400px; margin: auto; }
+    pre { background: #f4f4f4; padding: 10px; border-radius: 5px; text-align: left; }
+    .ok { color: green; }
+    .error { color: red; }
+    #captureBtn { background-color: #007bff; color: white; border: none; width: 90%; max-width: 400px; }
+  </style>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+</head>
+<body>
+  <h2>📦 Escaneo con Captura Manual</h2>
+
+  <!-- Cargar pedido -->
+  <label>Cargar pedido (Codigo,cantidad):</label>
+  <input type="file" id="pedidoFile" accept=".txt">
+
+  <button onclick="iniciarCamara()">📷 Iniciar cámara</button>
+  <div id="reader"></div>
+
+  <!-- Botón de captura justo debajo de la cámara -->
+  <button id="captureBtn" onclick="capturarCodigo()">📸 Capturar</button>
+
+  <h3>Lecturas:</h3>
+  <pre id="lecturas"></pre>
+
+  <button onclick="comparar()">🔎 Comparar</button>
+
+  <h3>Resultado Comparativo:</h3>
+  <pre id="resultado"></pre>
+
+<script>
+let pedido = {};        // codigos del TXT
+let escaneados = {};    // codigos capturados
+let ultimoCodigo = "";  // último leído por la cámara
+let html5QrcodeScanner;
+
+// Leer archivo TXT pedido
+function parseTXT(content) {
+  let data = {};
+  let lineas = content.trim().split(/\r?\n/);
+  for (let linea of lineas) {
+    let [codigo, cantidad] = linea.split(/[,;]+/);
+    if (codigo && cantidad) {
+      data[codigo.trim()] = parseInt(cantidad.trim());
+    }
+  }
+  return data;
+}
+
+document.getElementById("pedidoFile").addEventListener("change", function(evt) {
+  let file = evt.target.files[0];
+  if (!file) return;
+  let reader = new FileReader();
+  reader.onload = e => { 
+    pedido = parseTXT(e.target.result); 
+    alert("✅ Pedido cargado correctamente.");
+  };
+  reader.readAsText(file);
+});
+
+// Iniciar cámara
+function iniciarCamara() {
+  if (html5QrcodeScanner) {
+    html5QrcodeScanner.clear();
+  }
+  html5QrcodeScanner = new Html5Qrcode("reader");
+  html5QrcodeScanner.start(
+    { facingMode: "environment" },
+    { fps: 10, qrbox: 250 },
+    (decodedText) => {
+      ultimoCodigo = decodedText.trim(); // solo guarda, no registra aún
+    },
+    (errorMessage) => {}
+  ).catch(err => alert("Error al iniciar cámara: " + err));
+}
+
+// Capturar manualmente el código detectado
+function capturarCodigo() {
+  if (!ultimoCodigo) {
+    alert("⚠️ No hay código detectado. Enfoca bien el código de barras.");
+    return;
+  }
+  registrarLectura(ultimoCodigo);
+  ultimoCodigo = ""; // reset para que no repita el mismo
+}
+
+// Registrar lectura
+function registrarLectura(codigo) {
+  let lecturasDiv = document.getElementById("lecturas");
+  if (pedido[codigo]) {
+    escaneados[codigo] = (escaneados[codigo] || 0) + 1;
+    lecturasDiv.innerHTML += `<div class="ok">✔️ ${codigo} leído correctamente</div>`;
+  } else {
+    lecturasDiv.innerHTML += `<div class="error">❌ ${codigo} no está en el pedido</div>`;
+  }
+}
+
+// Comparar pedido vs escaneado
+function comparar() {
+  let resultado = "";
+  let totalSolicitado = 0, totalEscaneado = 0;
+
+  for (let codigo in pedido) {
+    let solicitado = pedido[codigo] || 0;
+    let leidos = escaneados[codigo] || 0;
+    let dif = solicitado - leidos;
+
+    totalSolicitado += solicitado;
+    totalEscaneado += leidos;
+
+    resultado += `${codigo} → Solicitado: ${solicitado}, Escaneado: ${leidos}, Diferencia: ${dif}\n`;
+  }
+
+  resultado += `\n📊 Total solicitado: ${totalSolicitado}\n📊 Total escaneado: ${totalEscaneado}`;
+  document.getElementById("resultado").textContent = resultado || "⚠️ No se cargó pedido o no hay lecturas.";
+}
+</script>
+</body>
+</html>
